@@ -125,7 +125,7 @@ def my_model(features, labels, mode, params):
     return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op)
 
 
-def app():
+def app1():
     import iris_data
 
     batch_size = 100
@@ -174,5 +174,86 @@ def app():
         print(template.format(iris_data.SPECIES[class_id], 100 * probability, expec))
 
 
+def app2():
+    abalone_train = "./data/abalone/train.csv"
+    abalone_test = "./data/abalone/test.csv"
+    abalone_predict = "./data/abalone/predict.csv"
+
+    training_set = tf.contrib.learn.datasets.base.load_csv_without_header(
+        filename=abalone_train, target_dtype=np.int, features_dtype=np.float64)
+
+    test_set = tf.contrib.learn.datasets.base.load_csv_without_header(
+        filename=abalone_test, target_dtype=np.int, features_dtype=np.float64)
+
+    prediction_set = tf.contrib.learn.datasets.base.load_csv_without_header(
+        filename=abalone_predict, target_dtype=np.int, features_dtype=np.float64)
+
+    print(prediction_set)
+    print(type(prediction_set))
+
+    model_params = {"learning_rate": 0.001}
+    nn = tf.estimator.Estimator(model_fn=model_fn2, params=model_params, model_dir='./output/d2')
+
+    train_input_fn = tf.estimator.inputs.numpy_input_fn(
+        x={"x": np.array(training_set.data)},
+        y=np.array(training_set.target),
+        num_epochs=None,
+        shuffle=True)
+
+    nn.train(input_fn=train_input_fn, steps=5000)
+
+    test_input_fn = tf.estimator.inputs.numpy_input_fn(
+        x={"x": np.array(test_set.data)},
+        y=np.array(test_set.target),
+        num_epochs=1,
+        shuffle=False)
+
+    ev = nn.evaluate(input_fn=test_input_fn)
+    print("Loss: %s" % ev["loss"])
+    print("Root Mean Squared Error: %s" % ev["rmse"])
+
+    predict_input_fn = tf.estimator.inputs.numpy_input_fn(
+        x={"x": prediction_set.data},
+        num_epochs=1,
+        shuffle=False)
+    predictions = nn.predict(input_fn=predict_input_fn)
+    t = np.array(prediction_set.target)
+    for i, p in enumerate(predictions):
+        print("Prediction {}\t t:{}\tp{}".format(i + 1, t[i], p["ages"]))
+
+
+def model_fn2(features, labels, mode, params):
+    first_hidden_layer = tf.layers.dense(features["x"], 10, activation=tf.nn.relu)
+    second_hidden_layer = tf.layers.dense(first_hidden_layer, 10, activation=tf.nn.relu)
+    output_layer = tf.layers.dense(second_hidden_layer, 1)
+
+    predictions = tf.reshape(output_layer, [-1])
+
+    if mode == tf.estimator.ModeKeys.PREDICT:
+        return tf.estimator.EstimatorSpec(
+            mode=mode,
+            predictions={"ages": predictions})
+
+    loss = tf.losses.mean_squared_error(labels, predictions)
+
+    eval_metric_ops = {
+        "rmse": tf.metrics.root_mean_squared_error(
+            tf.cast(labels, tf.float64), predictions)
+    }
+
+    tf.summary.scalar('loss', loss)
+
+    optimizer = tf.train.GradientDescentOptimizer(
+        learning_rate=params["learning_rate"])
+    train_op = optimizer.minimize(
+        loss=loss, global_step=tf.train.get_global_step())
+
+    return tf.estimator.EstimatorSpec(
+        mode=mode,
+        loss=loss,
+        train_op=train_op,
+        eval_metric_ops=eval_metric_ops)
+
+
 if __name__ == '__main__':
-    app()
+    app2()
