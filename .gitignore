@@ -4,3 +4,4 @@ backup
 output
 __pycache__
 .idea
+.ipynb_checkpoints
